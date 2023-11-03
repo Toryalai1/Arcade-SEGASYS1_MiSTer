@@ -4,8 +4,11 @@ module SEGASYS1_SPRITE
 (
 	input          VCLKx8,
 	input          VCLKx4,
+	input          VCLK,
 	input          VCLKx4_EN,
 	input          VCLK_EN,
+
+	input          SYSTEM2,
 
 	input  	[8:0]		PH,
 	input  	[8:0]		PV,
@@ -19,7 +22,7 @@ module SEGASYS1_SPRITE
 	output reg		 	sprcoll,
 	output reg [9:0]	sprcoll_ad,
 
-	output    [10:0]	sprpx
+	output reg [10:0]	sprpx
 );
 
 wire [8:0] HPOS = PH;
@@ -59,14 +62,16 @@ wire [10:0] _prevpix;
 reg  [10:0]  prevpix;
 wire side = VPOS[0];
 
+wire [10:0] opix;
 reg   [9:0] rad0,rad1=1;
 LineBuf lbuf(
-	VCLKx8, rad0, (rad0==rad1), sprpx, 
+	VCLKx8, rad0, (rad0==rad1), opix, 
 	VCLKx8, {~side,xpos}, wdat, we & (wdat[3:0] != 4'h0), _prevpix
 );
 always @(posedge VCLKx8) begin
 	rad0 <= {side,HPOS};
 	if (VCLK_EN) begin
+		sprpx <= opix;
 		rad1  <= rad0;
 	end
 end
@@ -93,7 +98,7 @@ always @ ( posedge VCLKx8 ) if (VCLKx4_EN) begin
 
 			// initialize
 			2'h0: begin
-				svpos   <= VPOS[7:0]+1'd1;
+				svpos   <= VPOS+1'd1;
 				spr_num <= `SPSTART;
 				spr_ofs <= 0;
 				hits    <= 0;
@@ -144,7 +149,7 @@ always @ ( posedge VCLKx8 ) if (VCLKx4_EN) begin
 			// get yofs/xpos/bank
 			2: begin
 				yofs <= hitsprvps[hitr];
-				xpos <= sprdt[8:1]+4'd14;
+				xpos <= ((sprdt[8:0]+1)>>1) + (SYSTEM2 ? 8'd22 : 8'd14);
 				bank <= { sprdt[13], sprdt[14], sprdt[15] };
 				spr_ofs <= 2;
 				phaseHD <= 3;

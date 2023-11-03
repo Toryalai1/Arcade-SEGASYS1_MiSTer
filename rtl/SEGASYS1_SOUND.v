@@ -1,10 +1,10 @@
 // Copyright (c) 2017,19 MiSTer-X
 
-`define EN_SCPU	(ROMAD[17:13]==5'b00_110)	// $0C000-$0DFFF
+`define EN_SCPU        (ROMAD[18:15]==4'b000_0) // $0-$7fff
 
 module SEGASYS1_SOUND
 (
-	input         clk48M,
+	input         clk40M,
 	input         reset,
 
 	input   [7:0] sndno,
@@ -12,10 +12,8 @@ module SEGASYS1_SOUND
 
 	output [15:0] sndout,
 
-	input         ROMCL,		// Downloaded ROM image
-	input  [24:0] ROMAD,
-	input   [7:0] ROMDT,
-	input         ROMEN
+	output [14:0] snd_rom_addr,
+	input   [7:0] snd_rom_do
 );
 
 
@@ -23,11 +21,10 @@ module SEGASYS1_SOUND
 //  ClockGen
 //----------------------------------
 wire clk8M_en,clk4M_en,clk2M_en;
-SndClkGen clkgen(clk48M,clk8M_en,clk4M_en,clk2M_en);
-
+SndClkGen clkgen(clk40M,clk8M_en,clk4M_en,clk2M_en);
 
 //----------------------------------
-//  Z80 (1.5625MHz)
+//  Z80 (4MHz)
 //----------------------------------
 wire [15:0] cpu_ad;
 wire  [7:0] cpu_di, cpu_do;
@@ -42,7 +39,7 @@ SndADec adec(
 );
 
 Z80IP cpu(
-	.clk(clk48M),
+	.clk(clk40M),
 	.clk_en(clk4M_en & cpuwait_n),
 	.reset(reset),
 	.adr(cpu_ad),
@@ -55,28 +52,25 @@ Z80IP cpu(
 	.mx(cpu_mreq),
 	.ix(cpu_iorq),
 	.rd(cpu_rd),
-	.wr(cpu_wr),
-	.wait_n(1'b1)
+	.wr(cpu_wr)
 );
 
 wire  [7:0]		rom_dt;		// ROM
 wire  [7:0]		ram_do;		// RAM
 wire  [7:0]		comlatch;	// Sound Command Latch
 
-DLROM #(13,8) subir( clk48M, cpu_ad[12:0], rom_dt, ROMCL,ROMAD,ROMDT,ROMEN & `EN_SCPU );
-SRAM_2048 wram( clk48M, cpu_ad[10:0], ram_do, cpu_wr_ram, cpu_do );
+assign snd_rom_addr = cpu_ad[14:0];
+assign rom_dt = snd_rom_do;
 
-dataselector3 scpudisel(
-	cpu_di,
-	cpu_cs_rom, rom_dt,
-	cpu_cs_ram, ram_do,
-	cpu_cs_com, comlatch,
-	8'hFF
-);
+//DLROM #(13,8) subir( cpuclkx2, cpu_ad[12:0], rom_dt, ROMCL,ROMAD,ROMDT,ROMEN & `EN_SCPU );
+SRAM_2048 wram( clk40M, cpu_ad[10:0], ram_do, cpu_wr_ram, cpu_do );
 
+assign cpu_di = cpu_cs_rom ? rom_dt :
+                cpu_cs_ram ? ram_do :
+                cpu_cs_com ? comlatch :	8'hFF;
 
 SndPlayReq sndreq (
-	clk48M, clk8M_en, reset,
+	clk40M, clk8M_en, reset,
 	sndno, sndstart,
 	cpu_irq, cpu_irqa,
 	cpu_nmi, cpu_nmia,
@@ -92,7 +86,7 @@ wire       psg0wait, psg1wait;
 wire       cpuwait_n = psg0wait & psg1wait;
 
 sn76489_top psg0(
-	.clock_i(clk48M),
+	.clock_i(clk40M),
 	.clock_en_i(clk2M_en),
 	.res_n_i(~reset),
 	.ce_n_i(~(cpu_cs_psg0 & cpu_mreq)),
@@ -103,7 +97,7 @@ sn76489_top psg0(
 );
 
 sn76489_top psg1(
-	.clock_i(clk48M),
+	.clock_i(clk40M),
 	.clock_en_i(clk4M_en),
 	.res_n_i(~reset),
 	.ce_n_i(~(cpu_cs_psg1 & cpu_mreq)),
@@ -121,21 +115,21 @@ endmodule
 
 module SndClkGen
 (
-	input     clk48M,
+	input     clk40M,
 	output    clk8M_en,
 	output    clk4M_en,
 	output    clk2M_en
 );
 
 reg [4:0] count;
-always @( posedge clk48M ) begin
+always @( posedge clk40M ) begin
 	count <= count + 1'd1;
-	if (count == 23) count <= 0;
+	if (count == 19) count <= 0;
 end
 
 assign clk2M_en = count == 0;
-assign clk4M_en = count == 0 || count == 12;
-assign clk8M_en = count == 0 || count == 6 || count == 12 || count == 18;
+assign clk4M_en = count == 0 || count == 10;
+assign clk8M_en = count == 0 || count == 5 || count == 10 || count == 15;
 
 endmodule
 

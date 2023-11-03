@@ -43,7 +43,7 @@ end
 
 endmodule
 
-`ifdef DONTUSE
+
 //----------------------------------
 //  4K SRAM
 //----------------------------------
@@ -63,7 +63,6 @@ always @( posedge clk ) begin
 end
 
 endmodule 
-`endif
 
 
 //----------------------------------
@@ -156,52 +155,66 @@ endmodule
 //----------------------------------
 module VRAMs
 (
-	input					clk0,
-	input       [9:0]	adr0,
-	output reg  [7:0]	dat0,
-	input       [7:0]	dtw0,
-	input					wen0,
+	input              clk,
+	input      [12:0]  adr0,
+	output reg  [7:0]  dat0,
+	input       [7:0]  dtw0,
+	input              wen0,
 
-	input					clk1,
-	input       [9:0]	adr1,
-	output reg  [7:0]	dat1
+	input      [12:0]  adr1,
+	output reg  [7:0]  dat1,
+
+	input      [12:0]  adr2,
+	output reg  [7:0]  dat2
 );
 
-reg [7:0] core [0:1023];
+reg   [7:0] core ['h2000];
 
-always @( posedge clk0 ) begin
+reg         sel;
+reg  [12:0] adr;
+reg   [7:0] dat;
+
+always @( posedge clk ) begin
 	if (wen0) core[adr0] <= dtw0;
-	else dat0 <= core[adr0];
+	dat0 <= core[adr0];
+
+	adr <= sel ? adr1 : adr2;
+	dat <= core[adr];
 end
 
-always @( posedge clk1 ) begin
-	dat1 <= core[adr1];
+always @( posedge clk ) begin
+	sel <= ~sel;
+	if (sel) dat1 <= dat; else dat2 <= dat;
 end
 
 endmodule
 
 module VRAM
 (
-	input					clk0,
-	input     [10:0]	adr0,
-	output     [7:0]	dat0,
-	input      [7:0]	dtw0,
-	input					wen0,
+	input            clk,
+	input    [13:0]  adr0,
+	output    [7:0]  dat0,
+	input     [7:0]  dtw0,
+	input            wen0,
 
-	input					clk1,
-	input       [9:0]	adr1,
-	output     [15:0]	dat1
+	input    [12:0]  adr1,
+	output   [15:0]  dat1,
+	input    [12:0]  adr2,
+	output   [15:0]  dat2
 );
 
 wire even = ~adr0[0];
 wire  odd =  adr0[0];
 
-wire [7:0] do00, do01, do10, do11;
-VRAMs ram0( clk0, adr0[10:1], do00, dtw0, wen0 & even, clk1, adr1, do10 );
-VRAMs ram1( clk0, adr0[10:1], do01, dtw0, wen0 &  odd, clk1, adr1, do11 );
+wire [7:0] do00, do01, do10, do11, do20, do21;
+VRAMs ram0(clk, adr0[13:1], do00, dtw0, wen0 & even,
+           adr1, do10, adr2, do20);
+VRAMs ram1(clk, adr0[13:1], do01, dtw0, wen0 &  odd,
+           adr1, do11, adr2, do21);
 
-assign dat0 = adr0[0] ? do01 : do00;
+assign dat0 = odd ? do01 : do00;
 assign dat1 = { do11, do10 };
+assign dat2 = { do21, do20 };
 
 endmodule
 
@@ -211,154 +224,24 @@ endmodule
 //----------------------------------
 module LineBuf
 (
-	input	   			clkr,
-	input	     [9:0]	radr,
-	input	   			clre,
-	output reg [10:0]	rdat,
+	input				clkr,
+	input	  [9:0]	radr,
+	input				clre,
+	output [10:0]	rdat,
 	
-	input	    			clkw,
-	input	      [9:0]	wadr,
-	input	     [10:0]	wdat,
-	input	    			we,
-	output reg [10:0]	rdat1
+	input				clkw,
+	input	  [9:0]	wadr,
+	input	 [10:0]	wdat,
+	input				we,
+	output [10:0]	rdat1
 );
 
-reg [10:0] ram[1024];
-
-always @(posedge clkr) begin
-	if(clre) begin
-		ram[radr] <= 0;
-		rdat <= 0;
-	end
-	else begin
-		rdat <= ram[radr];
-	end
-end
-
-always @(posedge clkw) begin
-	if(we) begin
-		ram[wadr] <= wdat;
-		rdat1 <= wdat;
-	end
-	else begin
-		rdat1 <= ram[wadr];
-	end
-end
-
-endmodule
-
-
-//----------------------------------
-//  Data Selector (32bits)
-//----------------------------------
-module dataselector1_32(
-
-	output [31:0] oDATA,
-
-	input iSEL0,
-	input [31:0] iDATA0,
-
-	input [31:0] dData
+DPRAM1024_11B core (
+	radr,wadr,
+	clkr,clkw,
+	16'h0,{5'h0,wdat},
+	clre,we,
+	rdat,rdat1
 );
 
-assign oDATA = iSEL0 ? iDATA0 :
-					dData;
-
 endmodule
-
-
-//----------------------------------
-//  Data Selector 3 to 1
-//----------------------------------
-module dataselector3(
-
-	output [7:0] oDATA,
-
-	input iSEL0, input [7:0] iDATA0,
-	input iSEL1, input [7:0] iDATA1,
-	input iSEL2, input [7:0] iDATA2,
-
-	input [7:0] dData
-);
-
-assign oDATA = iSEL0 ? iDATA0 :
-					iSEL1 ? iDATA1 :
-					iSEL2 ? iDATA2 :
-					dData;
-
-endmodule
-
-
-//----------------------------------
-//  Data Selector 2 to 1 (11bits)
-//----------------------------------
-module dataselector2_11(
-
-	output [10:0] oDATA,
-
-	input iSEL0, input [10:0] iDATA0,
-	input iSEL1, input [10:0] iDATA1,
-
-	input [10:0] dData
-);
-
-assign oDATA = iSEL0 ? iDATA0 :
-					iSEL1 ? iDATA1 :
-					dData;
-
-endmodule
-
-
-//----------------------------------
-//  Data Selector 5 to 1
-//----------------------------------
-module dataselector5(
-
-	output [7:0] oDATA,
-
-	input iSEL0, input [7:0] iDATA0,
-	input iSEL1, input [7:0] iDATA1,
-	input iSEL2, input [7:0] iDATA2,
-	input iSEL3, input [7:0] iDATA3,
-	input iSEL4, input [7:0] iDATA4,
-
-	input [7:0] dData
-);
-
-assign oDATA = iSEL0 ? iDATA0 :
-					iSEL1 ? iDATA1 :
-					iSEL2 ? iDATA2 :
-					iSEL3 ? iDATA3 :
-					iSEL4 ? iDATA4 :
-					dData;
-
-endmodule
-
-
-//----------------------------------
-//  Data Selector 6 to 1
-//----------------------------------
-module dataselector6(
-
-	output [7:0] oDATA,
-
-	input iSEL0, input [7:0] iDATA0,
-	input iSEL1, input [7:0] iDATA1,
-	input iSEL2, input [7:0] iDATA2,
-	input iSEL3, input [7:0] iDATA3,
-	input iSEL4, input [7:0] iDATA4,
-	input iSEL5, input [7:0] iDATA5,
-
-	input [7:0] dData
-);
-
-assign oDATA = iSEL0 ? iDATA0 :
-					iSEL1 ? iDATA1 :
-					iSEL2 ? iDATA2 :
-					iSEL3 ? iDATA3 :
-					iSEL4 ? iDATA4 :
-					iSEL5 ? iDATA5 :
-					dData;
-
-endmodule
-

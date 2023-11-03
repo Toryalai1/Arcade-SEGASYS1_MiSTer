@@ -1,11 +1,11 @@
 // Copyright (c) 2017,19 MiSTer-X
 
-`define DECTBLADRS	(25'h2C100)
+`define DECTBLADRS	(25'h60400)
 
-`define EN_DEC1TBL	(ROMAD[17:7]==11'b10_1100_0001_0)	// $2C100	 
+`define EN_DEC1TBL	(ROMAD[18:7]==12'b110_0000_0100_0)	// $60400
 
-`define EN_DEC2XOR	(ROMAD[17:7]==11'b10_1100_0001_0) 	// $2C100
-`define EN_DEC2SWP	(ROMAD[17:7]==11'b10_1100_0001_1)	// $2C180 
+`define EN_DEC2XOR	(ROMAD[18:7]==12'b110_0000_0100_0) 	// $60400
+`define EN_DEC2SWP	(ROMAD[18:7]==12'b110_0000_0100_1)	// $60480
 
 
 module SEGASYS1_PRGDEC
@@ -171,4 +171,3 @@ end
 assign rad = madr[14:0];
 
 endmodule
-
